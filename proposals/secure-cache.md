@@ -1,10 +1,11 @@
-# browser.secureStorage
+# browser.secureCache
 
-WebExtension proposal to allow the secure storage of data in platform specific locations.
+WebExtension proposal to allow the secure storage of small amounts of data in platform specific locations to support key handling optimizations
+where an extension-specific fallback to obtaining usable key material for the task is always available.
 
 ## Champions
 
-- Oliver Dunk (1Password) - [@oliverdunk](https://github.com/oliverdunk), [email](mailto:oliver@1password.com)
+- Christian R. (1Password)  - [@simpleplaces](https://github.com/simpleplaces/), [email](mailto:smp@pengin.systems)
 
 ## Motivation
 
@@ -14,25 +15,23 @@ Users understandably prefer not to type this, so in desktop applications, a comm
 
 ## Proposal
 
-We propose a new browser.secureStorage API that would use platform-dependent APIs for storing sensitive data:
+We propose a new `browser.secureCache` API that would use platform-dependent APIs for storing sensitive data:
 
 - macOS: [Keychain](https://developer.apple.com/documentation/security/keychain_services)
 - Windows: [Trusted Platform Module (TPM)](https://docs.microsoft.com/en-us/windows/security/information-protection/tpm/trusted-platform-module-overview)
 - Android: [Keystore](https://source.android.com/security/keystore)
 - Linux: See FAQ
 
-A mock for this proposal is available [here](secure-storage-mock.js).
-
 ### API
 
-**browser.secureStorage.getInfo**
+**browser.secureCache.getInfo**
 
 First, the getInfo function allows you to determine what implementation you are using. This is useful if you trust one implementation but not another. It also tells you which methods of authentication are available to protect the secret.
 
 Request:
 
 ```
-browser.secureStorage.getInfo();
+browser.secureCache.getInfo();
 ```
 
 Response:
@@ -49,12 +48,12 @@ Response:
 }
 ```
 
-**browser.secureStorage.store**
+**browser.secureCache.store**
 
 This stores the provided string.
 
 ```
-browser.secureStorage.store({
+browser.secureCache.store({
   id: "example-data"
   authentication: ["BIOMETRY_FACE", "BIOMETRY_FINGERPRINT"],
   data: JSON.stringify({ password: "!72AH8d_.-*gFgNFPUFz2" })
@@ -63,20 +62,20 @@ browser.secureStorage.store({
 
 The authentication array is optional. If omitted, the secret is available without the need for any of the recognised auth methods but is still stored in the hardware backed location.
 
-**browser.secureStorage.retrieve**
+**browser.secureCache.retrieve**
 
 This retrieves the stored data. The browser will only provide it if the user authenticates with one of the allowed mechanisms for this secret, and will throw an error otherwise.
 
 ```
-browser.secureStorage.retrieve({ id: "example-data" });
+browser.secureCache.retrieve({ id: "example-data" });
 ```
 
-**browser.secureStorage.remove**
+**browser.secureCache.remove**
 
-Removes an entry from secureStorage given an ID. No biometrics are required.
+Removes an entry from secureCache given an ID. No biometrics are required.
 
 ```
-browser.secureStorage.remove({ id: "example-data" });
+browser.secureCache.remove({ id: "example-data" });
 ```
 
 ## FAQ
