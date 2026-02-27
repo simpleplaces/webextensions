@@ -21,6 +21,8 @@ We propose a new `browser.secureCache` API that would use platform-dependent API
 - Android: [Keystore](https://source.android.com/security/keystore)
 - Linux: See FAQ
 
+Data stored using this API will be strongly bound to the extension's identifier or browser identity to prevent unexpected contexts from obtaining sensitive values. It also will not be persisted in an insecure form persistently (such as on-disk) by explicit browser action.
+
 ### Fallbacks
 
 In the event the current OS platform doesn't provide key storage APIs which enable greater security or more durable persistence (such as Linux), a browser may opt to only keep data written through `browser.secureCache` inside of its own process memory (ideally wrapped in any OS-specific guards applicable) until the browser is closed. This provides several compounding advantages over exclusively using platform storage:
@@ -41,7 +43,7 @@ By not providing durability guarantees (hence a secure cache, not storage), quir
 
 **browser.secureCache.getInfo**
 
-First, the getInfo function allows you to determine what implementation you are using. This is useful if you trust one implementation but not another. It also tells you which methods of authentication are available to protect the secret.
+First, the `getInfo` function allows you to determine what implementation you are using. This is useful if you trust one implementation but not another or want to estimate the durability currently available. It also tells you if secrets can be guarded by user verification.
 
 Request:
 
@@ -54,32 +56,32 @@ Response:
 ```
 {
   type: "MACOS_KEYCHAIN",
-  availableAuthentication: [
-    "PIN",
-    "PASSWORD",
-    "BIOMETRY_FACE",
-    "BIOMETRY_FINGERPRINT"
-  ]
+  uvAvailable: true
 }
 ```
 
 **browser.secureCache.store**
 
-This stores the provided string.
+This stores the provided bytes in the most durable storage location currently available based on the underlying platform and/or browser preferences.
 
 ```
 browser.secureCache.store({
   id: "example-data"
-  authentication: ["BIOMETRY_FACE", "BIOMETRY_FINGERPRINT"],
-  data: JSON.stringify({ password: "!72AH8d_.-*gFgNFPUFz2" })
+  uvRequired: false,
+  timeout: Temporal.Duration.from({ days: 14 }),
+  data: JSON.stringify({ password: new Uint8Array(16) })
 });
 ```
 
-The authentication array is optional. If omitted, the secret is available without the need for any of the recognised auth methods but is still stored in the hardware backed location.
+The `uvRequired` boolean is optional. If omitted, the secret is available without the need for any of the recognised auth methods but is still stored in a secure location. If the parameter is set to `true` but the current platform can't support the requirement, an exception is thrown.
+
+The `timeout` [Duration](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/Duration) is optional. If omitted, the secret will remain available as long as the underlying implementation can uphold. Browser extensions that wish to, for example, force stronger re-authentication periodically may utilize this. If the same secret id is stored again with a timeout, this should replace any previously set duration to "reset" the expiry countdown.
 
 **browser.secureCache.retrieve**
 
-This retrieves the stored data. The browser will only provide it if the user authenticates with one of the allowed mechanisms for this secret, and will throw an error otherwise.
+This retrieves the stored data. If user verification was originally set to required when persisting the data, the browser will only provide it if the user successfully verifies themself through a strong implementation-specific authentication ceremomy.
+
+If the `timeout` parameter was originally set and represented a period of time shorter than the platform holds the secret otherwise, the browser agent will invalidate the secret at the time this method is is called by the owning extension and notify the extension of such expiry through an error.
 
 ```
 browser.secureCache.retrieve({ id: "example-data" });
@@ -87,7 +89,7 @@ browser.secureCache.retrieve({ id: "example-data" });
 
 **browser.secureCache.remove**
 
-Removes an entry from secureCache given an ID. No biometrics are required.
+Removes an entry from the secre cache given an ID. No user verification is required regardless of the secret's original configuration.
 
 ```
 browser.secureCache.remove({ id: "example-data" });
