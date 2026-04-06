@@ -25,7 +25,7 @@ Data stored using this API will be strongly bound to the extension's identifier 
 
 ### Fallbacks
 
-In the event the current OS platform doesn't provide key storage APIs which enable greater security or more durable persistence (such as Linux), a browser may opt to only keep data written through `browser.secureCache` inside of its own process memory (ideally wrapped in any OS-specific guards applicable) until the browser is closed. This provides several compounding advantages over exclusively using platform storage:
+In the event the current OS platform doesn't provide key storage APIs which enable greater security or more durable persistence (such as Linux), a browser may opt to only keep data written through `browser.secureCache` inside of its own process memory (wrapped in any OS-specific guards available) until the browser is closed. This provides several compounding advantages over exclusively using platform storage:
 - APIs can be made available over the widest set of platform possible immediately, allowing extensions to adopt it faster without their own detection logic.
 - The new secure cache will still be more durable then an extension's own memory, especially in the context of MV3 extensions which may be restarted at any point.
 - The new APIs will have higher ambient security assurances compared to session storage, which lets `browser.secureCache` always be the go-to recommendation for keys.
@@ -69,7 +69,7 @@ browser.secureCache.store({
   id: "example-data"
   uvRequired: false,
   timeout: Temporal.Duration.from({ days: 14 }),
-  data: JSON.stringify({ password: new Uint8Array(16) })
+  data: new Uint8Array(16)
 });
 ```
 
@@ -77,14 +77,18 @@ The `uvRequired` boolean is optional. If omitted, the secret is available withou
 
 The `timeout` [Duration](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/Duration) is optional. If omitted, the secret will remain available as long as the underlying implementation can uphold. Browser extensions that wish to, for example, force stronger re-authentication periodically may utilize this. If the same secret id is stored again with a timeout, this should replace any previously set duration to "reset" the expiry countdown.
 
+The `data` parameter is a byte buffer/array containing the data the caller wants the platform to persist.
+
 **browser.secureCache.retrieve**
 
 This retrieves the stored data. If user verification was originally set to required when persisting the data, the browser will only provide it if the user successfully verifies themself through a strong implementation-specific authentication ceremomy.
 
-If the `timeout` parameter was originally set and represented a period of time shorter than the platform holds the secret otherwise, the browser agent will invalidate the secret at the time this method is is called by the owning extension and notify the extension of such expiry through an error.
+If the `timeout` parameter was originally set and represented a period of time shorter than the platform holds the secret otherwise, the browser agent will invalidate the secret at the time this method is is called by the owning extension and notify the extension of such expiry through an error. Callers must handle the possibility of calls taking arbitrarily long as a user may not interact with the prompt right away.
+
+If the the user verification prompt or method presented by the platform is cancelled, the call will throw an error informing the caller of such. The extension may retry the retrieval as soon as it needs to.
 
 ```
-browser.secureCache.retrieve({ id: "example-data" });
+await browser.secureCache.retrieve({ id: "example-data" });
 ```
 
 **browser.secureCache.remove**
@@ -117,7 +121,7 @@ We expect that the API would benefit a wide range of extensions, providing value
 
 There’s a lot of existing work here, including [feature requests](https://bugs.webkit.org/show_bug.cgi?id=217929) opened by this proposal's champions in the past.
 
-Some of this work includes a proposal for a “[Web API For Accessing Secure Element](https://globalplatform.github.io/WebApis-for-SE/doc/)”, which seems to have been abandoned, and a proposal for [Hardware Based Secure Service](https://rawgit.com/w3c/websec/gh-pages/hbss.html) features which is [no longer active](https://lists.w3.org/Archives/Public/public-hb-secure-services/2018Mar/0001.html).
+Some of this work includes a proposal for a “[Web API For Accessing Secure Element](https://globalplatform.github.io/WebApis-for-SE/doc/)”, which seems to have been abandoned, and a proposal for [Hardware Based Secure Service](https://w3c.github.io/websec/hbss.html) features which is [no longer active](https://lists.w3.org/Archives/Public/public-hb-secure-services/2018Mar/0001.html).
 
 The most promising work at the moment is WebAuthn’s new [large blob storage extension](https://www.w3.org/TR/webauthn-2/#sctn-large-blob-extension). The spec also seems to provide few guarantees about how this data should be stored, with implementers saying it is [unsuitable for sensitive data](https://developers.yubico.com/libfido2/Manuals/fido_dev_largeblob_get.html#CAVEATS). However, since it requires a Webauthn authenticator to be present, it wouldn't be available in nearly as many user scenarios. Similar reasoning applies to the [PRF extension](https://github.com/w3c/webauthn/issues/1462).
 
