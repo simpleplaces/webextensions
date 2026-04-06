@@ -21,7 +21,18 @@ We propose a new `browser.secureCache` API that would use platform-dependent API
 - Android: [Keystore](https://source.android.com/security/keystore)
 - Linux: See FAQ
 
-Data stored using this API must be strongly bound to the extension's identifier or browser identity to prevent unexpected contexts from obtaining sensitive values. It also will not be persisted in an insecure form persistently (such as on-disk) by explicit browser action.
+Data stored using this API must be strongly bound to the extension's identifier (origin) and browser identity to prevent unexpected contexts from obtaining sensitive values. It also will not be persisted in an insecure form persistently (such as on-disk) by explicit browser action.
+
+### Threat Model
+
+Data written through `browser.secureCache` should be resistant to malicious threats operating with the same level of permissions as the browser or user agent itself on an otherwise properly configured OS without default platform safeguards disabled. This rules out attackers with elevated permissions ("admin-level attacks") and constrains the scope to what is commonly referred to as "same-user" attacks.
+
+The only spaces trusted to handle the sensitive data are the browser process itself and the operating system/platform the browser is required to trust and interact with. Other processes and other extensions inside the same browser should be assumed dishonest. Once data leaves one of these spaces (for example, to be persisted for an extended period) it must be encrypted (or similar) and tamper-resistant to observers outside the small trusted scope.
+
+These examples, while non-exhaustive, shouldn't allow compromise of stored data:
+- A malicious entity scanning the browser profile's persistent data on-disk.
+- A malicious entity installing a malicious browser extension with an identifier spoofed to look like a real extension which has stored data in the past.
+- An extension requesting a secret with the same identifier as one stored by a completely different extension earlier.
 
 ### Fallbacks
 
@@ -74,7 +85,8 @@ browser.secureCache.store({
 });
 ```
 
-The `uvRequired` boolean is optional. If omitted, the secret is available without the need for any of the recognised auth methods but is still stored in a secure location. If the parameter is set to `true` but the current platform can't support the requirement, an exception is thrown.
+The `uvRequired` boolean is optional. If omitted, the secret is available without the need for any of the recognised auth methods but is still stored in a secure location. If the parameter is set to `true` but the current platform can't support the requirement, an exception is thrown. Inversely, if the platform
+can only interact with secure hardware after performing UV and the parameter is set to `false`, an exception is also thrown.
 
 The `timeout` [Duration](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/Duration) is optional. If omitted, the secret will remain available as long as the underlying implementation can uphold. Browser extensions that wish to, for example, force stronger re-authentication periodically may utilize this. If the same secret id is stored again with a timeout, this should replace any previously set duration to "reset" the expiry countdown.
 
