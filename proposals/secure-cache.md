@@ -21,7 +21,7 @@ We propose a new `browser.secureCache` API that would use platform-dependent API
 - Android: [Keystore](https://source.android.com/security/keystore)
 - Linux: See FAQ
 
-Data stored using this API will be strongly bound to the extension's identifier or browser identity to prevent unexpected contexts from obtaining sensitive values. It also will not be persisted in an insecure form persistently (such as on-disk) by explicit browser action.
+Data stored using this API must be strongly bound to the extension's identifier or browser identity to prevent unexpected contexts from obtaining sensitive values. It also will not be persisted in an insecure form persistently (such as on-disk) by explicit browser action.
 
 ### Fallbacks
 
@@ -43,7 +43,7 @@ By not providing durability guarantees (hence a secure cache, not storage), quir
 
 **browser.secureCache.getInfo**
 
-First, the `getInfo` function allows you to determine what implementation you are using. This is useful if you trust one implementation but not another or want to estimate the durability currently available. It also tells you if secrets can be guarded by user verification.
+First, the `getInfo` function allows an extension to determine what capabilities the current platform implementation its running on provides. This is useful, for example, if the extension only trusts hardware devices but not in-memory storage or want to estimate the durability currently available. It also describes if secrets can be protected by mandatory user verification.
 
 Request:
 
@@ -55,7 +55,8 @@ Response:
 
 ```
 {
-  type: "MACOS_KEYCHAIN",
+  hardwareBacked: true,
+  systemRestartPersistent: true,
   uvAvailable: true
 }
 ```
@@ -77,7 +78,7 @@ The `uvRequired` boolean is optional. If omitted, the secret is available withou
 
 The `timeout` [Duration](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Temporal/Duration) is optional. If omitted, the secret will remain available as long as the underlying implementation can uphold. Browser extensions that wish to, for example, force stronger re-authentication periodically may utilize this. If the same secret id is stored again with a timeout, this should replace any previously set duration to "reset" the expiry countdown.
 
-The `data` parameter is a byte buffer/array containing the data the caller wants the platform to persist.
+The `data` parameter is a byte buffer/array containing the data the caller wants the platform to persist. If `data` is larger then 1KB, an error will be thrown. Large amounts of data should not be stored with this API, as it may encounter platform-specific slowdowns or limitations (ie `mlock` limits). In order to improve cross-platform compatibility, a lower bound is enforced by the browser.
 
 **browser.secureCache.retrieve**
 
@@ -100,10 +101,6 @@ browser.secureCache.remove({ id: "example-data" });
 ```
 
 ## FAQ
-
-**How large could the stored data be?**
-
-The expectation is that implementation specific limits would be set. Only a very small allowance (< 1KB) is needed for the known use cases. It is recommended that implementors keep the small allowance in order to prevent anti-patterns or unexpected platform-specific slowdowns.
 
 **Are there any extensions that would use this?**
 
