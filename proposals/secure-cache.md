@@ -23,6 +23,37 @@ We propose a new `browser.secureCache` API that would use platform-dependent API
 
 Data stored using this API must be strongly bound to the extension's identifier (origin) and browser identity to prevent unexpected contexts from obtaining sensitive values. It also will not be persisted in an insecure form persistently (such as on-disk) by explicit browser action.
 
+### Developer Story
+
+We intend to position the `browser.secureCache` API(s) as the recommended solution for all extension developers who need to store sensitive or secret data. Even in browsers that only implement partial support, its use enhances all users' baseline security. Reasons include:
+- `storage.session` does not have a specific threat model and treats all values identically regardless of a developer's sensitivity classification.
+- In-memory implementations can implement OS-specific memory hardening protections that extension developers cannot.
+- All extensions using the secure storage APIs will receive costless security and UX enhancements when the underlying browser improves feature support.
+
+In the expected use cases, there are not any downsides to using the API for all secrets management in favor of existing APIs like `storage.session`. Developers offload a large burden of tracking platform-specific security concerns and end users benefit from improvements during their regular browser updates.
+For example, this widely applicable pattern could be encouraged:
+```js
+const storeSecret = (value, mustPersist) => {
+  if (typeof browser.secureCache.getInfo === "function") {
+    const info = browser.secureCache.getInfo();
+    if (mustPersist && !info.hardwareBacked) {
+      throw "persistent storage not available"
+    }
+
+    browser.secureCache.store(value);
+  } else {
+    // Old browser version
+    if (mustPersist) {
+        throw "persistent storage not available"
+    } else {
+      storage.session.set(value)
+    }
+  }
+};
+```
+
+When persistence is required but not available, web extension applications can fall back to the existing mechanisms that exist today for the long-standing limitation. Otherwise, the best location is selected automatically.
+
 ### Threat Model
 
 Data written through `browser.secureCache` should be resistant to malicious threats operating with the same level of permissions as the browser or user agent itself on an otherwise properly configured OS without default platform safeguards disabled. This rules out attackers with elevated permissions ("admin-level attacks") and constrains the scope to what is commonly referred to as "same-user" attacks.
@@ -116,7 +147,7 @@ browser.secureCache.remove({ id: "example-data" });
 
 **Are there any extensions that would use this?**
 
-This proposal is drafted by the team at 1Password. Its [extension](https://chrome.google.com/webstore/detail/1password-%E2%80%93-password-mana/aeblfdkhhhdcdjpifhhbdiojplfjncoa?hl=en) is available for Chrome, Firefox, Safari, and Edge and has more than 2M weekly active users in the Chrome Web Store alone. They would be quick to implement this in conjunction with or in place of our current Native Messaging solution.
+This proposal is drafted by the team at 1Password. Its [extension](https://chrome.google.com/webstore/detail/1password-%E2%80%93-password-mana/aeblfdkhhhdcdjpifhhbdiojplfjncoa?hl=en) is available for Chrome, Firefox, Safari, and Edge and has more than 2M weekly active users in the Chrome Web Store alone. They would be quick to implement this in conjunction with or in place of our current Native Messaging solution. Additionally, it may provide a better durable store for client-side secrets such as the Secret Key across 1Password's web apps.
 
 The Dashlane browser extension, also a password manager with over 4M weekly active users in the Chrome Web Store, currently provides a remember me and biometric authentication feature in its extension to make repeated authentication easier. They would also be very quick to implement this in place of their solution which requires a network connection, as they don’t leverage a native application to interface with native storage.
 
